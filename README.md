@@ -1,4 +1,4 @@
 server-setup
 ============
 
-Setup script to configure a secure Linux web server
+Setup script to configure a secure Ubuntu web server

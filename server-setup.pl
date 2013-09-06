@@ -72,9 +72,7 @@ sub modify_config {
                local $add_func = "^add\(.+\)";
                local $to_add = trim ((split ($delim, $val))[1]);
                if ($to_add =~ /$add_func/) {
-                  $to_add = substr ($to_add, 4, length($to_add) - 5);
-                  print STDOUT "$to_add\n";
-                  
+                  $to_add = substr ($to_add, 4, length($to_add) - 5);                  
                   local $existing_delim = " ";
                   if (index ($line, "=") != -1) {
 		     $existing_delim = "=";
