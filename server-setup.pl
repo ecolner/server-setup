@@ -2,7 +2,6 @@
  use IO::Prompt;
  use File::Copy;
  use Cwd;
- use Sys::Hostname;
 ########################################################################
 #
 # Securing a server based on the excellent Ubuntu security writeup here:
@@ -135,6 +134,12 @@ sub modify_config {
 while (prompt "\nServer admin email? [me@example.com]: ", -while => qr/.+\@.+\..+/) {}
 my $email = trim ($_);
 
+while (prompt "\nWhat domain name are you using the server for [example.com]? ", -while => qr/^$/) {}
+local $site = trim ($_);
+if (index ($site, 'www.') == 0) {
+   $site = substr ($site, 4);
+}
+
 # change root password   
 print STDOUT "We'll begin securing the server by changing the root password\n";
 run ("passwd");
@@ -198,7 +203,7 @@ run ("sysctl", "-p");
 if (-e "/etc/bind/named.conf.options") {
    modify_config ("/etc/bind/named.conf.options",
                    "recursion no;",
-                   "version "Not Disclosed";");
+                   "version \"Not Disclosed\";");
    run ("/etc/init.d/bind9", "restart");
 }
 
@@ -239,7 +244,7 @@ modify_config ("/etc/ssh/sshd_config",
                 "UseDNS no",
                 "AllowUsers $user");
 
-# stop Apache info leakage
+# prevent Apache info leakage
 modify_config ("/etc/apache2/conf.d/security",
                 "ServerTokens Prod",
                 "ServerSignature Off",
@@ -247,6 +252,63 @@ modify_config ("/etc/apache2/conf.d/security",
                 "Header set ETag-->Header unset ETag",
                 "FileETag None");
 # restart Apache
+run ("service", "apache2", "restart");
+
+# install apache2 mod_security
+run ("apt-get", "install", "-y", "libxml2", "libxml2-dev", "libxml2-utils");
+run ("apt-get", "install", "-y", "libaprutil1", "libaprutil1-dev");
+run ("ln", "-s", "/usr/lib/x86_64-linux-gnu/libxml2.so.2", "/usr/lib/libxml2.so.2");
+run ("apt-get", "install", "-y", "libapache-mod-security");
+move ("/etc/modsecurity/modsecurity.conf-recommended", "/etc/modsecurity/modsecurity.conf");
+modify_config ("/etc/modsecurity/modsecurity.conf",
+                "SecRuleEngine On",
+                
+                # increase upload limit to 16MB
+                "SecRequestBodyLimit 16384000",
+                "SecRequestBodyInMemoryLimit 16384000"
+                );
+run ("wget", "-O", "SpiderLabs-owasp-modsecurity-crs.tar.gz", "https://github.com/SpiderLabs/owasp-modsecurity-crs/tarball/master");
+run ("tar", "-zxvf", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
+run ("cp", "-R", "SpiderLabs-owasp-modsecurity-crs-*/*", "/etc/modsecurity/");
+run ("rm", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
+run ("rm", "-R", "SpiderLabs-owasp-modsecurity-crs-*");
+move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
+opendir (DIR, "/etc/modsecurity/base_rules") or die "Couldn't open /etc/modsecurity/base_rules: $!";
+while (my $file = readdir(DIR)) {
+   run ("ln", "-s", "/etc/modsecurity/base_rules/$file", "/etc/modsecurity/activated_rules/$file");
+}
+closedir(DIR);
+opendir (DIR, "/etc/modsecurity/optional_rules") or die "Couldn't open /etc/modsecurity/optional_rules: $!";
+while (my $file = readdir(DIR)) {
+   run ("ln", "-s", "/etc/modsecurity/optional_rules/$file", "/etc/modsecurity/activated_rules/$file");
+}
+closedir(DIR);
+modify_config ("/etc/apache2/mods-available/mod-security.conf",
+                "Include \"/etc/modsecurity/activated_rules/*.conf\"");
+run ("a2enmod", "headers");
+run ("a2enmod", "mod-security");
+run ("service", "apache2", "restart");
+
+# install apache2 mod_evasive
+run ("apt-get", "install", "-y", "libapache2-mod-evasive");
+run ("mkdir", "/var/log/mod_evasive");
+run ("chown", "www-data:www-data", "/var/log/mod_evasive/");
+open my $mod_evasive, '>', "mod_evasive.conf" or die "Can't create mod_evasive.conf file: $!";
+print $mod_evasive "<ifmodule mod_evasive20.c>\n" .
+                      "\tDOSHashTableSize 3097\n" .
+                      "\tDOSPageCount  2\n" .
+                      "\tDOSSiteCount  50\n" .
+                      "\tDOSPageInterval 1\n" .
+                      "\tDOSSiteInterval  1\n" .
+                      "\tDOSBlockingPeriod  10\n" .
+                      "\tDOSLogDir   /var/log/mod_evasive\n" .
+                      "\tDOSEmailNotify  $email\n" .
+                      "\tDOSWhitelist   127.0.0.1\n" .
+                   "</ifmodule>";
+close $mod_evasive;
+move ("./mod_evasive.conf", "/etc/apache2/mods-available/mod-evasive.conf");
+run ("ln", "-s", "/etc/alternatives/mail /bin/mail/");
+run ("a2enmod", "mod-evasive");
 run ("service", "apache2", "restart");
 
 # install ufw
@@ -259,10 +321,9 @@ run ("ufw", "status", "verbose");
 
 # install DenyHosts
 run ("apt-get", "install", "-y", "denyhosts");
-local $host = hostname();
 modify_config ("/etc/denyhosts.conf",
                 "ADMIN_EMAIL = $email",
-                "SMTP_FROM = DenyHosts nobody@$host");
+                "SMTP_FROM = DenyHosts nobody@$site");
 
 # install Fail2ban
 run ("apt-get", "install", "-y", "fail2ban");
@@ -320,6 +381,20 @@ close $fstab_out;
 
 # install PSAD
 run ("apt-get", "install", "-y", "psad");
+modify_config ("/etc/psad/psad.conf",
+                "EMAIL_ADDRESSES             $email;",
+                "HOSTNAME                    $site;",
+                "ENABLE_AUTO_IDS             Y;",
+                "ENABLE_AUTO_IDS_EMAILS      Y;"
+                );
+run ("iptables", "-A", "INPUT", "-j", "LOG");
+run ("iptables", "-A", "FORWARD", "-j", "LOG");
+run ("ip6tables", "-A", "INPUT", "-j", "LOG");
+run ("ip6tables", "-A", "FORWARD", "-j", "LOG");
+run ("psad", "-R");
+run ("psad", "--sig-update");
+run ("psad", "-H");
+run ("psad", "--Status");
 
 # scan open ports with Nmap
 run ("apt-get", "install", "-y", "nmap");
