@@ -274,19 +274,20 @@ foreach my $filename (@glob) {
    run ("cp", "-R", $filename, "/etc/modsecurity/");
 }
 run ("rm", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
-my @crs_dir = glob ("SpiderLabs-owasp-modsecurity-crs-*");
-run ("rm", "-R", $crs_dir[0]);
-move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
-opendir (DIR, "/etc/modsecurity/base_rules") or die "Couldn't open /etc/modsecurity/base_rules: $!";
-while (my $file = readdir(DIR)) {
+@glob = glob ("SpiderLabs-owasp-modsecurity-crs-*");
+run ("rm", "-R", $glob[0]);
+
+@glob = map m|([^/]+)$|, </etc/modsecurity/base_rules/*>;
+foreach my $file (@glob) {
    run ("ln", "-s", "/etc/modsecurity/base_rules/$file", "/etc/modsecurity/activated_rules/$file");
 }
-closedir(DIR);
-opendir (DIR, "/etc/modsecurity/optional_rules") or die "Couldn't open /etc/modsecurity/optional_rules: $!";
-while (my $file = readdir(DIR)) {
+
+@glob = map m|([^/]+)$|, </etc/modsecurity/optional_rules/*>;
+foreach my $file (@glob) {
    run ("ln", "-s", "/etc/modsecurity/optional_rules/$file", "/etc/modsecurity/activated_rules/$file");
 }
-closedir(DIR);
+
+move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
 modify_config ("/etc/apache2/mods-available/mod-security.conf",
                 "Include \"/etc/modsecurity/activated_rules/*.conf\"");
 run ("a2enmod", "mod-security");
