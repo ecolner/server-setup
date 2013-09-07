@@ -33,8 +33,6 @@ sub run {
 
 # modify_config (path, newline delimited values)
 sub modify_config {
-   local $find = "";
-   local $replace = " ";
    local $file = $_[0];
    local $file_copy = $file . "_copy";
    local $num_vals = scalar (@_);
@@ -121,17 +119,18 @@ sub modify_config {
          }
          print $log_out "APPENDED: $val";
          print $log_out "\n";
-         $val .= "\n";
-         print $copy $val;
+         print $copy "$val\n";
       }
    }
    close $copy;
-   move ($file_copy, $file) or die "Couldn't modify $file: $!";
    close $log_out;
+   move ($file_copy, $file) or die "Couldn't modify $file: $!";
 }
 
 # MAIN
-while (prompt "\nServer admin email? [me\@example.com]: ", -while => qr/.+\@.+\..+/) {}
+while (prompt "\nServer admin email? [me\@example.com]: ", -until => qr/[^@\.]+@[^\.]+\.[^\.]+/) {
+   print STDOUT "Invalid email.  Retry.\n";
+}
 my $email = trim ($_);
 
 while (prompt "\nWhat domain name are you using the server for [example.com]? ", -while => qr/^$/) {}
@@ -141,7 +140,7 @@ if (index ($site, 'www.') == 0) {
 }
 
 # change root password   
-print STDOUT "We'll begin securing the server by changing the root password\n";
+print STDOUT "\nWe'll begin securing the server by changing the root password\n";
 run ("passwd");
 
 # create new user
@@ -245,6 +244,8 @@ modify_config ("/etc/ssh/sshd_config",
                 "AllowUsers $user");
 
 # prevent Apache info leakage
+run ("a2enmod", "headers");
+run ("service", "apache2", "restart");
 modify_config ("/etc/apache2/conf.d/security",
                 "ServerTokens Prod",
                 "ServerSignature Off",
