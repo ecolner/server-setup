@@ -342,7 +342,7 @@ while (my $line = <$fail2ban_jail>) {
       print $fail2ban_jail_copy $line;
    } elsif ($found_ssh_section) {
       if (index ($line, "enabled") == 0) {
-         print $fail2ban_jail_copy "enabled  = true";
+         print $fail2ban_jail_copy "enabled  = true\n";
          $found_ssh_section = 0;
       } else {
          print $fail2ban_jail_copy $line;
