@@ -131,7 +131,7 @@ sub modify_config {
 }
 
 # MAIN
-while (prompt "\nServer admin email? [me@example.com]: ", -while => qr/.+\@.+\..+/) {}
+while (prompt "\nServer admin email? [me\@example.com]: ", -while => qr/.+\@.+\..+/) {}
 my $email = trim ($_);
 
 while (prompt "\nWhat domain name are you using the server for [example.com]? ", -while => qr/^$/) {}
@@ -329,10 +329,10 @@ modify_config ("/etc/denyhosts.conf",
 run ("apt-get", "install", "-y", "fail2ban");
 open my $fail2ban_jail, '<', "/etc/fail2ban/jail.conf" or die "Can't open jail.conf file: $!";
 open my $fail2ban_jail_copy, '>', "/etc/fail2ban/jail.conf_copy" or die "Can't create jail.conf temporary file: $!";
-my $found_ssh_section = false;
+my $found_ssh_section = 0;
 while (my $line = <$fail2ban_jail>) {
    if (index ($line, "[ssh]") == 0) {
-      $found_ssh_section = true;
+      $found_ssh_section = 1;
       print $fail2ban_jail_copy $line;
    } elsif ($found_ssh_section) {
       if (index ($line, "enabled") == 0) {
