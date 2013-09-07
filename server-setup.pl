@@ -159,7 +159,7 @@ modify_config ("/etc/sudoers",
 # protect su by limiting access only to admin group.
 run ("groupadd", "-f", "admin");
 run ("usermod", "-a", "-G", "admin", $user);
-run ("dpkg-statoverride", "--update", "--add", "root", "admin", "4750", "/bin/su");
+run ("dpkg-statoverride", "--force", "--update", "--add", "root", "admin", "4750", "/bin/su");
 
 # harden network with sysctl settings
 modify_config ("/etc/sysctl.conf",
@@ -223,8 +223,6 @@ if (-e "/etc/php5/apache2/php.ini") {
                   "track_errors = Off",
                   "html_errors = Off",
                   "magic_quotes_gpc = Off");
-   # restart Apache
-   run ("service", "apache2", "restart");
 } else {
    print STDOUT "\n\nWARNING ----- /etc/php5/apache2/php.ini file not found.  Must secure PHP manually.\n\n";
    print STDOUT "Add or edit the following lines an save :\n";
@@ -246,15 +244,14 @@ modify_config ("/etc/ssh/sshd_config",
                 "AllowUsers $user");
 
 # prevent Apache info leakage
-run ("a2enmod", "headers");
-run ("service", "apache2", "restart");
 modify_config ("/etc/apache2/conf.d/security",
                 "ServerTokens Prod",
                 "ServerSignature Off",
                 "TraceEnable Off",
                 "Header set ETag-->Header unset ETag",
                 "FileETag None");
-# restart Apache
+run ("a2enmod", "headers");
+run ("service", "apache2", "reload");
 run ("service", "apache2", "restart");
 
 # install apache2 mod_security
@@ -272,7 +269,7 @@ modify_config ("/etc/modsecurity/modsecurity.conf",
                 );
 run ("wget", "-O", "SpiderLabs-owasp-modsecurity-crs.tar.gz", "https://github.com/SpiderLabs/owasp-modsecurity-crs/tarball/master");
 run ("tar", "-zxvf", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
-run ("cp", "-R", "SpiderLabs-owasp-modsecurity-crs-*/*", "/etc/modsecurity/");
+run ("cp", "-R", glob ("SpiderLabs-owasp-modsecurity-crs-*/*"), "/etc/modsecurity/");
 run ("rm", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
 run ("rm", "-R", "SpiderLabs-owasp-modsecurity-crs-*");
 move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
@@ -288,8 +285,8 @@ while (my $file = readdir(DIR)) {
 closedir(DIR);
 modify_config ("/etc/apache2/mods-available/mod-security.conf",
                 "Include \"/etc/modsecurity/activated_rules/*.conf\"");
-run ("a2enmod", "headers");
 run ("a2enmod", "mod-security");
+run ("service", "apache2", "reload");
 run ("service", "apache2", "restart");
 
 # install apache2 mod_evasive
@@ -312,6 +309,7 @@ close $mod_evasive;
 move ("./mod_evasive.conf", "/etc/apache2/mods-available/mod-evasive.conf");
 run ("ln", "-s", "/etc/alternatives/mail /bin/mail/");
 run ("a2enmod", "mod-evasive");
+run ("service", "apache2", "reload");
 run ("service", "apache2", "restart");
 
 # install ufw
@@ -377,10 +375,8 @@ run ("apt-get", "install", "-y", "tiger");
 run ("tiger");
 
 # secure shared memory (requires reboot)
-open my $fstab_out, '>>', "/etc/fstab" or die "Can't append fstab file: $!";
-print $fstab_out "\n";
-print $fstab_out "tmpfs     /dev/shm     tmpfs     defaults,noexec,nosuid     0     0\n";
-close $fstab_out;
+modify_config ("/etc/fstab",
+                "tmpfs     /dev/shm     tmpfs     defaults,noexec,nosuid     0     0\n");
 
 # install PSAD
 run ("apt-get", "install", "-y", "psad");
@@ -423,11 +419,11 @@ print STDOUT "Preparing to reboot server.  Your session is about to be lost.\n";
 print STDOUT "Again, we've secured the server by disallowing root user login.\n";
 print STDOUT "Use $user account to log back in.\n\n";
 
+print STDOUT "\n\nServer setup completed successfully.\n\n";
+
 my $reboot = prompt ("Reboot now? [y/n]: ", -ynd => "y");
 if ($reboot) {
    run ("reboot");
 } else {
    print STDOUT "\n\nWARNING ----- You will need to reboot for the changes to take affect.\n";
 }
-
-print STDOUT "\n\nServer setup completed successfully.\n\n";
