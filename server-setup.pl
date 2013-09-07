@@ -269,9 +269,13 @@ modify_config ("/etc/modsecurity/modsecurity.conf",
                 );
 run ("wget", "-O", "SpiderLabs-owasp-modsecurity-crs.tar.gz", "https://github.com/SpiderLabs/owasp-modsecurity-crs/tarball/master");
 run ("tar", "-zxvf", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
-run ("cp", "-R", glob ("SpiderLabs-owasp-modsecurity-crs-*/*"), "/etc/modsecurity/");
+my @glob = glob ("SpiderLabs-owasp-modsecurity-crs-*/*");
+foreach my $filename (@glob) {
+   run ("cp", "-R", $filename, "/etc/modsecurity/");
+}
 run ("rm", "SpiderLabs-owasp-modsecurity-crs.tar.gz");
-run ("rm", "-R", "SpiderLabs-owasp-modsecurity-crs-*");
+my @crs_dir = glob ("SpiderLabs-owasp-modsecurity-crs-*");
+run ("rm", "-R", $crs_dir[0]);
 move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
 opendir (DIR, "/etc/modsecurity/base_rules") or die "Couldn't open /etc/modsecurity/base_rules: $!";
 while (my $file = readdir(DIR)) {
