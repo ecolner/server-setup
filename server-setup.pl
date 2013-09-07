@@ -255,8 +255,6 @@ modify_config ("/etc/apache2/conf.d/security",
                 "Header set ETag-->Header unset ETag",
                 "FileETag None");
 run ("a2enmod", "headers");
-run ("service", "apache2", "reload");
-run ("service", "apache2", "restart");
 
 # install apache2 mod_security
 run ("apt-get", "install", "-y", "libxml2", "libxml2-dev", "libxml2-utils");
@@ -293,10 +291,8 @@ foreach my $file (@glob) {
 
 move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
 modify_config ("/etc/apache2/mods-available/mod-security.conf",
-                "</IfModule>-->\tInclude \"/etc/modsecurity/activated_rules/*.conf\"\n</IfModule>");
+                "</IfModule>-->Include \"/etc/modsecurity/activated_rules/*.conf\"\n</IfModule>");
 run ("a2enmod", "mod-security");
-run ("service", "apache2", "reload");
-run ("service", "apache2", "restart");
 
 # install apache2 mod_evasive
 run ("apt-get", "install", "-y", "libapache2-mod-evasive");
@@ -318,6 +314,8 @@ close $mod_evasive;
 move ("./mod_evasive.conf", "/etc/apache2/mods-available/mod-evasive.conf");
 run ("ln", "-sf", "/etc/alternatives/mail /bin/mail/");
 run ("a2enmod", "mod-evasive");
+
+# finally activate new modules and restart apache
 run ("service", "apache2", "reload");
 run ("service", "apache2", "restart");
 
