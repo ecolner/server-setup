@@ -49,7 +49,10 @@ sub modify_config {
    open local $copy, '>', "$file_copy" or die "Can't create $file_copy: $!";
    LINE: while (my $line = <$config>) {
       chomp ($line);
-      next LINE if length ($line) == 0;
+      if (length ($line) == 0) {
+         print $copy "\n";
+         next LINE;
+      }
       
       local $modified = 0;
       local $index = 0;
@@ -57,7 +60,6 @@ sub modify_config {
          local $delim = " ";
          local $key = "";
          if (index ($val, "-->") != -1) {
-            $val = trim ((split ("-->", $val))[1]);
             $delim = "-->";
          } elsif (index ($val, "=") != -1) {
             $delim = "=";
@@ -80,6 +82,8 @@ sub modify_config {
                   }
                   $val = "$key$delim$existing_val$to_add";
                }
+            } elsif ($delim eq "-->") {
+               $val = trim ((split ("-->", $val))[1]);
             }
             $modified = "$val";
             print $copy "$val\n";
@@ -257,7 +261,7 @@ run ("service", "apache2", "restart");
 # install apache2 mod_security
 run ("apt-get", "install", "-y", "libxml2", "libxml2-dev", "libxml2-utils");
 run ("apt-get", "install", "-y", "libaprutil1", "libaprutil1-dev");
-run ("ln", "-s", "/usr/lib/x86_64-linux-gnu/libxml2.so.2", "/usr/lib/libxml2.so.2");
+#run ("ln", "-s", "/usr/lib/x86_64-linux-gnu/libxml2.so.2", "/usr/lib/libxml2.so.2");
 run ("apt-get", "install", "-y", "libapache-mod-security");
 move ("/etc/modsecurity/modsecurity.conf-recommended", "/etc/modsecurity/modsecurity.conf");
 modify_config ("/etc/modsecurity/modsecurity.conf",
@@ -279,17 +283,17 @@ run ("rm", "-R", $glob[0]);
 
 @glob = map m|([^/]+)$|, </etc/modsecurity/base_rules/*>;
 foreach my $file (@glob) {
-   run ("ln", "-s", "/etc/modsecurity/base_rules/$file", "/etc/modsecurity/activated_rules/$file");
+   run ("ln", "-sf", "/etc/modsecurity/base_rules/$file", "/etc/modsecurity/activated_rules/$file");
 }
 
 @glob = map m|([^/]+)$|, </etc/modsecurity/optional_rules/*>;
 foreach my $file (@glob) {
-   run ("ln", "-s", "/etc/modsecurity/optional_rules/$file", "/etc/modsecurity/activated_rules/$file");
+   run ("ln", "-sf", "/etc/modsecurity/optional_rules/$file", "/etc/modsecurity/activated_rules/$file");
 }
 
 move ("/etc/modsecurity/modsecurity_crs_10_setup.conf.example", "/etc/modsecurity/modsecurity_crs_10_setup.conf");
 modify_config ("/etc/apache2/mods-available/mod-security.conf",
-                "Include \"/etc/modsecurity/activated_rules/*.conf\"");
+                "</IfModule>-->\tInclude \"/etc/modsecurity/activated_rules/*.conf\"\n</IfModule>");
 run ("a2enmod", "mod-security");
 run ("service", "apache2", "reload");
 run ("service", "apache2", "restart");
@@ -312,7 +316,7 @@ print $mod_evasive "<ifmodule mod_evasive20.c>\n" .
                    "</ifmodule>";
 close $mod_evasive;
 move ("./mod_evasive.conf", "/etc/apache2/mods-available/mod-evasive.conf");
-run ("ln", "-s", "/etc/alternatives/mail /bin/mail/");
+run ("ln", "-sf", "/etc/alternatives/mail /bin/mail/");
 run ("a2enmod", "mod-evasive");
 run ("service", "apache2", "reload");
 run ("service", "apache2", "restart");
