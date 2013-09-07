@@ -82,8 +82,7 @@ sub modify_config {
                }
             }
             $modified = "$val";
-            $val .= "\n";
-            print $copy $val;
+            print $copy "$val\n";
             $to_append[$index] = "";
          }
          $index++;
@@ -147,15 +146,18 @@ run ("passwd");
 print STDOUT "Next we need to create a new user to login since we'll no longer be using root\n";
 while (prompt "\nWhat user name would you like to create? ", -while => qr/^$/) {}
 my $user = trim ($_);
-run ("adduser", $user);
+
+my ($name, $passwd, $uid, $gid, $quota, $comment, $gcos, $dir, $shell) = getpwnam ($user);
+if (!$name && !$passwd && !$uid && !$gid && !$quota && !$comment && !$gcos && !$dir && !$shell) {
+   run ("adduser", $user);
+}
 
 # add new user to sudoers
-open my $sudoers_out, '>>', "/etc/sudoers" or die "Can't append sudoers file: $!";
-print $sudoers_out "$user    ALL=(ALL:ALL) ALL\n";
-close $sudoers_out;
+modify_config ("/etc/sudoers",
+                "$user    ALL=(ALL:ALL) ALL");
 
 # protect su by limiting access only to admin group.
-run ("groupadd", "admin");
+run ("groupadd", "-f", "admin");
 run ("usermod", "-a", "-G", "admin", $user);
 run ("dpkg-statoverride", "--update", "--add", "root", "admin", "4750", "/bin/su");
 
