@@ -296,7 +296,9 @@ run ("a2enmod", "mod-security");
 
 # install apache2 mod_evasive
 run ("apt-get", "install", "-y", "libapache2-mod-evasive");
-run ("mkdir", "/var/log/mod_evasive");
+if (!-d "/var/log/mod_evasive") {
+   run ("mkdir", "/var/log/mod_evasive");
+}
 run ("chown", "www-data:www-data", "/var/log/mod_evasive/");
 open my $mod_evasive, '>', "mod_evasive.conf" or die "Can't create mod_evasive.conf file: $!";
 print $mod_evasive "<ifmodule mod_evasive20.c>\n" .
@@ -312,12 +314,8 @@ print $mod_evasive "<ifmodule mod_evasive20.c>\n" .
                    "</ifmodule>";
 close $mod_evasive;
 move ("./mod_evasive.conf", "/etc/apache2/mods-available/mod-evasive.conf");
-run ("ln", "-sf", "/etc/alternatives/mail /bin/mail/");
+run ("ln", "-sf", "/etc/alternatives/mail /bin/mail");
 run ("a2enmod", "mod-evasive");
-
-# finally activate new modules and restart apache
-run ("service", "apache2", "reload");
-run ("service", "apache2", "restart");
 
 # install ufw
 run ("apt-get", "install", "-y", "ufw");
@@ -421,6 +419,10 @@ print STDOUT "Checking your system for rootkits using RKHunter...\n\n";
 run ("rkhunter", "--update");
 run ("rkhunter", "--propupd");
 run ("rkhunter", "--check");
+
+# finally activate new modules and restart apache
+run ("service", "apache2", "reload");
+run ("service", "apache2", "restart");
 
 print STDOUT "Preparing to reboot server.  Your session is about to be lost.\n";
 print STDOUT "Again, we've secured the server by disallowing root user login.\n";
